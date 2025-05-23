@@ -1,0 +1,48 @@
+{
+    "parameters": {
+        "sampling_rate": 500
+    },
+    "events": {
+        "Event Event Event event_1": {
+            "name": "rest_baseline",
+            "start": "F1",
+            "end": "F2"
+        },
+        "Event Event Event event_2": {
+            "name": "scenario_1",
+            "start": "F3",
+            "end": "F4"
+        },
+        "Event Event Event event_3": {
+            "name": "MAST",
+            "start": "F5",
+            "end": "F6"
+        },
+        "Event Event Event event_4": {
+            "name": "scenario_2",
+            "start": "F7",
+            "end": "F8"
+        },
+        "Event Event Event event_10": {
+            "name": "scenario_3",
+            "start": "F9",
+            "end": "F10"
+        }
+    },
+    "blocks_shorts": {},
+    "channel": [
+        "Bio",
+        "X",
+        "Y",
+        "Z"
+    ],
+    "output": {
+        "path": "G:\\Shared drives\\AdmonPsy - Driving&Stress\\Driving&Stress RESEARCH\\DATA_HRV_THESIS\\Experiment\\OUTPUTS"
+    },
+    "input": {
+        "path": "G:\\Shared drives\\AdmonPsy - Driving&Stress\\Driving&Stress RESEARCH\\DATA_HRV_THESIS\\Experiment\\DATA"
+    },
+    "HDF5": {
+        "path": "C:\\Users\\PsyLab-6028\\Desktop\\RoeeProj\\pages\\data\\mindwareData\\fibro_mindware.hdf5"
+    }
+}

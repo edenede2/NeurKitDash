@@ -1,0 +1,34 @@
+{
+    "parameters": {
+        "sampling_rate": 500
+    },
+    "events": {
+        "Event event_1": {
+            "name": "PreMast",
+            "start": "F4",
+            "end": "F5"
+        },
+        "Event event_2": {
+            "name": "",
+            "start": "",
+            "end": ""
+        }
+    },
+    "blocks_shorts": {},
+    "channel": [
+        "Bio",
+        "Z",
+        "Y",
+        "X",
+        "Time"
+    ],
+    "output": {
+        "path": "G:\\Shared drives\\AdmonPsy - RDoC Study\\Experiment\\Outputs"
+    },
+    "input": {
+        "path": "G:\\Shared drives\\AdmonPsy - RDoC Study\\Experiment\\Data"
+    },
+    "HDF5": {
+        "path": ""
+    }
+}

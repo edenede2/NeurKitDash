@@ -1,0 +1,90 @@
+{
+    "parameters": {
+        "sampling_rate": 500
+    },
+    "events": {
+        "Event Event Event Event event_1": {
+            "name": "rest_baseline",
+            "start": "F1",
+            "end": "F2"
+        },
+        "Event Event Event Event event_2": {
+            "name": "rest_baseline_Binah",
+            "start": "F7",
+            "end": "F8",
+            "Binah": true
+        },
+        "Event Event Event Event event_3": {
+            "name": "rest_baseline_Korro",
+            "start": "F9",
+            "end": "F10",
+            "Korro": true
+        },
+        "Event Event Event Event event_4": {
+            "name": "scenario_1",
+            "start": "F3",
+            "end": "F4"
+        },
+        "Event Event Event Event event_5": {
+            "name": "MAST_5_Min",
+            "start": "F5",
+            "end": "F1"
+        },
+        "Event Event Event Event event_6": {
+            "name": "MAST_end",
+            "start": "F5",
+            "end": "F6"
+        },
+        "Event Event Event Event event_7": {
+            "name": "After_MAST_Binah",
+            "start": "F7",
+            "end": "F8",
+            "Binah": true
+        },
+        "Event Event Event Event event_8": {
+            "name": "After_MAST_Korro",
+            "start": "F9",
+            "end": "F10",
+            "Korro": true
+        },
+        "Event Event Event Event event_9": {
+            "name": "scenario_2",
+            "start": "F7",
+            "end": "F8"
+        },
+        "Event Event Event Event event_10": {
+            "name": "scenario_3",
+            "start": "F9",
+            "end": "F10"
+        },
+        "Event Event Event Event event_11": {
+            "name": "Relief_Binah",
+            "start": "F7",
+            "end": "F8",
+            "Binah": true
+        },
+        "Event Event Event Event event_12": {
+            "name": "Relief_Korro",
+            "start": "F9",
+            "end": "F10",
+            "Korro": true
+        }
+    },
+    "blocks_shorts": {},
+    "channel": [
+        "Time",
+        "Bio",
+        "X",
+        "Y",
+        "Z"
+    ],
+    "output": {
+        "path": "G:\\Shared drives\\AdmonPsy - Driving&Stress\\Driving&Stress RESEARCH\\DATA_HRV_THESIS\\Experiment\\OUTPUTS"
+    },
+    "input": {
+        "path": "G:\\Shared drives\\AdmonPsy - Driving&Stress\\Driving&Stress RESEARCH\\DATA_HRV_THESIS\\Experiment\\DATA"
+    },
+    "HDF5": {
+        "path": ""
+    }
+}

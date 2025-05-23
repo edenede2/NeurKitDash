@@ -1,0 +1,99 @@
+{
+    "parameters": {
+        "sampling_rate": 500
+    },
+    "events": {
+        "Event event_1": {
+            "name": "Questionears_A",
+            "start": "F2",
+            "end": "F3"
+        },
+        "Event event_2": {
+            "name": "Learning_Block_1",
+            "start": "lb1",
+            "end": "lb2"
+        },
+        "Event event_3": {
+            "name": "Learning_Block_2",
+            "start": "lb2",
+            "end": "lb3"
+        },
+        "Event event_4": {
+            "name": "Learning_Block_3",
+            "start": "lb3",
+            "end": "rb1"
+        },
+        "Event event_5": {
+            "name": "Learning_Block_3",
+            "start": "lb3",
+            "end": "lb4"
+        },
+        "Event event_6": {
+            "name": "Learning_Block_3",
+            "start": "lb4",
+            "end": "rb1"
+        },
+        "Event event_7": {
+            "name": "Reversal_block_1",
+            "start": "rb1",
+            "end": "rb2"
+        },
+        "Event event_8": {
+            "name": "Reversal_block_2",
+            "start": "rb2",
+            "end": "rb3"
+        },
+        "Event event_9": {
+            "name": "Reversal_block_3",
+            "start": "rb3",
+            "end": "experiment_finish"
+        },
+        "Event event_10": {
+            "name": "Learning_Block_All",
+            "start": "lb1",
+            "end": "rb1",
+            "group": "GSC1"
+        },
+        "Event event_11": {
+            "name": "Reversal_block_All",
+            "start": "rb1",
+            "end": "experiment_finish",
+            "group": "GSC1"
+        },
+        "Event event_12": {
+            "name": "Rest",
+            "start": "F4",
+            "end": "F5",
+            "group": "GSC2",
+            "window": {
+                "length": 4,
+                "step": 1
+            }
+        }
+    },
+    "blocks_shorts": {
+        "learning_block1": "lb1",
+        "learning_block2": "lb2",
+        "learning_block3": "lb3",
+        "learning_block4": "lb4",
+        "reversal_block1": "rb1",
+        "reversal_block2": "rb2",
+        "reversal_block3": "rb3"
+    },
+    "channel": [
+        "Time",
+        "Bio",
+        "GSC",
+        "X",
+        "Y"
+    ],
+    "output": {
+        "path": "C:\\Users\\PsyLab-6028\\Downloads"
+    },
+    "input": {
+        "path": "g:\\Shared drives\\AdmonPsy - Fibro\\Experiment\\Processed Data\\Data"
+    },
+    "HDF5": {
+        "path": "C:\\Users\\PsyLab-6028\\Desktop\\RoeeProj\\pages\\data\\mindwareData\\fibro_mindware.hdf5"
+    }
+}

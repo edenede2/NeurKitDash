@@ -1,0 +1,21 @@
+{
+    "parameters": {
+        "sampling_rate": 500
+    },
+    "events": {},
+    "blocks_shorts": {},
+    "channel": [
+        "Time",
+        "Bio",
+        "GSC"
+    ],
+    "output": {
+        "path": ""
+    },
+    "input": {
+        "path": ""
+    },
+    "HDF5": {
+        "path": ""
+    }
+}
