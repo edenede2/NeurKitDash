@@ -1,13 +1,11 @@
-from flask import session
+from flask import session, signals
 from dash import dcc, html, Dash, dependencies, dash_table, Input, Output, State, Patch, MATCH, ALL, callback
 from dash.exceptions import PreventUpdate
 import dash_bootstrap_components as dbc
 import dash_ag_grid as dag
 import plotly.graph_objs as go
 import pandas as pd
-import h5py
 import numpy as np
-import webview
 import os
 # import dash_core_components as dcc
 from flask import Flask
@@ -20,17 +18,15 @@ import dash
 import polars as pl
 import datetime
 
+from pages.paths import DATA_PATH, TEMPLATES_PATH, project_names
+from pages.data_manager import atomic_write, get_data_manager
+import logging
+
+logger = logging.getLogger(__name__)
+
 dash.register_page(__name__, name="Signal Processing Page", path="/", order = 6)
 
-pages = {}
-
-for page in os.listdir(r"C:\Users\PsyLab-6028\Desktop\RoeeProj\pages\templates"):
-    page_name = page.split("_")[0]
-    page_value = page.split("_")[0]
-
-    pages[page_name] = page_value
-
-
+pages = {name: name for name in project_names()}
 
 
 layout = html.Div([
@@ -123,9 +119,9 @@ def update_subjects_table(n_clicks, project):
         raise PreventUpdate
     
     
-    fibro_hdf_file = r'C:\Users\PsyLab-6028\Desktop\RoeeProj\pages\data\mindwareData'
+    fibro_hdf_file = DATA_PATH
 
-    fibro_hdf_file = os.path.join(fibro_hdf_file, f'{project}_mindware.parquet')
+    fibro_hdf_file = os.path.join(fibro_hdf_file, f'{project}_mindware_events.parquet')
 
     print(f'fibro_hdf_file: {fibro_hdf_file}')
 
@@ -136,18 +132,9 @@ def update_subjects_table(n_clicks, project):
     print(f'Loading fibro subjects table...')
 
     try:
-        # with pd.HDFStore(fibro_hdf_file, 'r') as store:
-        #     subjects = pd.read_hdf(store, key='events_data')
-
-        #     # try:
-        #     #     fibro_events_stats = json.loads(store.get_storer('events_data').attrs.description.decode('utf-8'))
-        #     # except:
-        #     #     fibro_events_stats = json.loads(store.get_storer('events_data').attrs.description)
-            
-        #     store.close()
-        subjects = pl.read_parquet(fibro_hdf_file.replace('.hdf5', '.parquet'))
+        subjects = pl.read_parquet(fibro_hdf_file)
     except Exception as e:
-        print(f"Error reading HDF5 file: {e}")
+        print(f"Error reading parquet file: {e}")
         return html.Div("Error loading data. Please check the file and try again.", style={"color": "red", "fontSize": 20})
 
     print(f'Loaded fibro subjects file')
@@ -159,7 +146,7 @@ def update_subjects_table(n_clicks, project):
 
     subjects = (
         subjects
-        .drop_nulls(subset=['Id'])
+        .drop_nulls(subset=['subject_id'])
         .with_row_index(name='Index')
     )
 
@@ -176,7 +163,7 @@ def update_subjects_table(n_clicks, project):
         },
         {
             'headerName': 'Id',
-            'field': 'Id',
+            'field': 'subject_id',
         },
         {
             'headerName': 'event_name',
@@ -191,12 +178,12 @@ def update_subjects_table(n_clicks, project):
         },
         {
             'headerName': 'artifacts_percentage_%',
-            'field': 'artifacts_percentage_%',
+            'field': 'artifacts_percentage',
             'type': 'rightAligned',
         },
         {
             'headerName': 'corrected_rpeaks_%',
-            'field': 'corrected_rpeaks_%',
+            'field': 'corrected_rpeaks_percentage',
             'type': 'rightAligned',
         },
         {
@@ -211,7 +198,7 @@ def update_subjects_table(n_clicks, project):
         },
         {
             'headerName': 'duration(minutes)',
-            'field': 'duration(minutes)',
+            'field': 'duration_minutes',
             'type': 'rightAligned',
         }
     ]
@@ -285,1077 +272,280 @@ def update_subjects_table(n_clicks, project):
     State('project-selection-dropdown', 'value'),
     )
 def update_plot(selectedRows, gsc_or_ecg, project):
-    print(f'selectedRows: {selectedRows}')
-    if not selectedRows:
-        return {}
-    
-    for row in selectedRows[0]:
-        gsc_or_ecg = gsc_or_ecg[0]
-        print(gsc_or_ecg)
-        sub_id = row['Id']
-        print(f'sub_id: {sub_id}')
-        event_name = row['event_name']
-        print(f'event_name: {event_name}')
-
-        hdf_file = r'C:\Users\PsyLab-6028\Desktop\RoeeProj\pages\data\mindwareData'
-
-        hdf_file = os.path.join(hdf_file, f'{project}_mindware.hdf5')
-
-        if not os.path.exists(hdf_file):
-            return html.Div("Error loading data. Please load subjects to the app and try again.", style={"color": "red", "fontSize": 20})
-
-        # try:
-        print(f'Loading data for subject {sub_id}...')
-        fibro_file = h5py.File(hdf_file, 'r')
-        print(f'Loaded data for subject {sub_id}')
-        fibro_events_data = json.loads(fibro_file[sub_id]['data'].attrs['events_data'].decode('utf-8'))
-        
-        try:
-            print(f'fibro_events_data: {fibro_events_data}')
-            gsc_attributes = json.loads(fibro_file[sub_id]['data'].attrs['gsc_attributes'].decode('utf-8'))
-
-            print(f'gsc_attributes: {gsc_attributes}')
-        except Exception as e:
-            print(f'Error loading attributes: {e}')
-            gsc_attributes = {}
-            
-        
-        event_start_time = fibro_events_data[event_name]['Start_Time']
-        event_end_time = fibro_events_data[event_name]['End_Time']
-
-
-        print(f'event_start_time: {event_start_time}')
-        print(f'event_end_time: {event_end_time}')
-        
-        try:
-            try:
-                signal_attributes = json.loads(fibro_file[sub_id]['rpeaks'].attrs['signal_attributes'].decode('utf-8'))
-            except Exception as e:
-                signal_attributes = json.loads(fibro_file[sub_id]['rpeaks'].attrs['signal_attributes'])
-        except Exception as e:
-            print(f'Error loading signal attributes: {e}')
-            signal_attributes = {}
-
-        print(f'signal_attributes: {signal_attributes}')
-        fibro_file.close()
-        print(f'Closed file')
-
-        
-        origin_signals = pd.read_hdf(hdf_file, key=f'{sub_id}/data')
-
-
-        # Standardize the ecg, gsc and motion signals
-        if gsc_or_ecg == 'ecg':
-            origin_signals['signal'] = (origin_signals['signal'] - origin_signals['signal'].mean()) / origin_signals['signal'].std()
-            origin_ecg = origin_signals['signal'].to_list()
-            origin_gsc = []
-        elif gsc_or_ecg == 'gsc':
-            origin_signals['gsc'] = (origin_signals['gsc'] - origin_signals['gsc'].mean()) / origin_signals['gsc'].std()
-            origin_gsc = origin_signals['gsc'].to_list()
-            origin_ecg = []
-        origin_signals['motion'] = (origin_signals['motion'] - origin_signals['motion'].mean()) / origin_signals['motion'].std()
-
-
-        
-        
-
-        original_time = origin_signals['time'].to_list()
-
-        print(f'signals: {origin_signals.head()}')
-
-        try:
-            rpeaks_index_df = pd.read_hdf(hdf_file, key=f'{sub_id}/rpeaks')
-        
-            print(f'rpeaks_index_df: {rpeaks_index_df.head()}')
-        except Exception as e:
-            print(f'Error loading rpeaks index: {e}')
-        
-        # Slice by 'Time' column
-        signals = origin_signals[(origin_signals['time'] >= event_start_time) & (origin_signals['time'] <= event_end_time)]
-
-        print(f'signals: {signals.head()}')
-
-        # Plotting
-        if 'gsc' in signals.columns and 'signal' in signals.columns:
-            try:
-                if gsc_or_ecg == 'gsc':
-                    print(f'Plotting GSC or ECG signals...')
-                    gsc_signal = signals['gsc'].to_list()
-                    eda_tonic = signals['eda_tonic'].to_list()
-                    eda_phasic = signals['eda_phasic'].to_list()
-
-                    print(f'gsc_signal: {gsc_signal[:5]}')
-                time = signals['time'].to_list()
-                motion = signals['motion'].to_list()
-    
-
-                if gsc_or_ecg == 'ecg':
-                    print(f'time: {time[:5]}')
-                    ecg_signal = signals['signal'].to_list()
-
-                    ecg_quality = nk.ecg_quality(origin_ecg, sampling_rate=500)
-
-                
-
-                    rpeaks = rpeaks_index_df[0].values.tolist()
-
-                # rpeaks_quality = ecg_quality[rpeaks]
-
-                    rpeaks_time = [original_time[i] for i in rpeaks]
-
-                    rpeaks_time = [i for i in rpeaks_time if i >= event_start_time and i <= event_end_time]
-                    rpeaks_index = [i for i in range(len(original_time)) if original_time[i] in rpeaks_time]
-                    rpeaks_quality = [ecg_quality[i] for i in rpeaks_index]
-
-
-                    print(f'rpeaks_quality: {rpeaks_quality}')
-                    print(f'rpeaks_time: {rpeaks_time}')
-                    yellow_peaks_time = signal_attributes['yellow_peaks']
-                    yellow_peaks_time = [original_time[i] for i in yellow_peaks_time]
-                    yellow_peaks_time = [i for i in yellow_peaks_time if i >= event_start_time and i <= event_end_time]
-                    yellow_peaks_index = [i for i in range(len(original_time)) if original_time[i] in yellow_peaks_time]
-
-                    print(f'yellow_peaks_time: {yellow_peaks_time}')
-                    ectopic_beats_time = signal_attributes['ectopic_beats']
-                    print(f'ectopic_beats_time: {ectopic_beats_time}')
-                    ectopic_beats_time = [original_time[i] for i in ectopic_beats_time]
-                    ectopic_beats_time = [i for i in ectopic_beats_time if i >= event_start_time and i <= event_end_time]
-                    ectopic_beats_index = [i for i in range(len(original_time)) if original_time[i] in ectopic_beats_time]
-
-                    print(f'ectopic_beats_time: {ectopic_beats_time}')
-                    long_short_beats_time = signal_attributes['longshort_beats']
-                    print(f'long_short_beats_time: {long_short_beats_time}')
-                    long_short_beats_time = [original_time[i] for i in long_short_beats_time]
-                    long_short_beats_time = [i for i in long_short_beats_time if i >= event_start_time and i <= event_end_time]
-                    long_short_beats_index = [i for i in range(len(original_time)) if original_time[i] in long_short_beats_time]
-
-
-                    print(f'long_short_beats_time: {long_short_beats_time}')
-                    false_negative_beats_time = signal_attributes['false_negatives']
-                    print(f'false_negative_beats_time: {false_negative_beats_time}')
-                    false_negative_beats_time = [original_time[i] for i in false_negative_beats_time]
-                    false_negative_beats_time = [i for i in false_negative_beats_time if i >= event_start_time and i <= event_end_time]
-                    false_negative_beats_index = [i for i in range(len(original_time)) if original_time[i] in false_negative_beats_time]
-
-
-                    print(f'false_negative_beats_time: {false_negative_beats_time}')
-                    false_positive_beats_time = signal_attributes['false_positives']
-                    print(f'false_positive_beats_time: {false_positive_beats_time}')
-                    false_positive_beats_time = [original_time[i] for i in false_positive_beats_time]
-                    false_positive_beats_time = [i for i in false_positive_beats_time if i >= event_start_time and i <= event_end_time]
-                    false_positive_beats_index = [i for i in range(len(original_time)) if original_time[i] in false_positive_beats_time]
-
-                if gsc_attributes != {}:
-                    scr_onset = gsc_attributes['SCR_Onsets']
-                    scr_onset = [original_time[i] for i in scr_onset]
-                    scr_onsets_time = [i for i in scr_onset if i >= event_start_time and i <= event_end_time]
-                    scr_onsets_index = [i for i in range(len(original_time)) if original_time[i] in scr_onsets_time]
-                    print(f'scr_onset: {scr_onset}')
-
-
-                    print(f'scr_onsets_time: {scr_onsets_time}')
-                    scr_peak = gsc_attributes['SCR_Peaks']
-                    scr_peak = [original_time[i] for i in scr_peak]
-                    scr_peaks_time = [i for i in scr_peak if i >= event_start_time and i <= event_end_time]
-                    scr_peak_index = [i for i in range(len(original_time)) if original_time[i] in scr_peaks_time]
-
-                    print(f'scr_peak: {scr_peak}')
-
-                    print(f'scr_peaks_time: {scr_peaks_time}')
-
-                    scr_height = gsc_attributes['SCR_Height']
-
-                    print(f'scr_height: {scr_height}')
-                    scr_amplitude = gsc_attributes['SCR_Amplitude']
-
-                    print(f'scr_amplitude: {scr_amplitude}')
-                    scr_risetime = gsc_attributes['SCR_RiseTime']
-
-                    print(f'scr_risetime: {scr_risetime}')
-                    scr_recovery = gsc_attributes['SCR_Recovery']
-            
-                    scr_recovery = [int(x) for x in scr_recovery if not np.isnan(x)]
-
-                    scr_recovery = [original_time[i] for i in scr_recovery]
-
-                    scr_recovery_time = [i for i in scr_recovery if i >= event_start_time and i <= event_end_time]
-
-                    scr_recovery_index = [i for i in range(len(original_time)) if original_time[i] in scr_recovery_time]
-
-                    print(f'scr_recovery: {scr_recovery}')
-
-                    scr_recoverytime = gsc_attributes['SCR_RecoveryTime']
-
-                    print(f'scr_recoverytime: {scr_recoverytime}')
-                
-                else:
-                    scr_onsets_time = []
-                    scr_peaks_time = []
-                    scr_recovery_time = []
-                    scr_onsets_index = []
-                    scr_peak_index = []
-                    scr_recovery_index = []
-                
-
-                # graph = html.Div(
-                #     'Plotting GSC or ECG signals...',
-                #     style={'color': 'green', 'fontSize': 20}
-                # )
-
-                if gsc_or_ecg == 'gsc':
-                    # if gsc_attributes == {}:
-                    #     return html.Div("No GSC data available for this subject.", style={"color": "red", "fontSize": 20})
-                    print(f'Plotting GSC signal...')
-                    
-                    graph = dcc.Graph(
-                                id={
-                                    'type': 'gsc-plot',
-                                    'index': 1
-                                },
-                                figure={
-                                    'data': [
-                                        go.Scatter(
-                                            x=time,
-                                            y=[x*1 for x in motion],
-                                            mode='lines',
-                                            name='Motion',
-                                            line=dict(color='black'),
-                                            hovertext=[f'Time: {time[i]}<br>Motion: {motion[i]}' for i in range(len(time))]
-                                        ),
-                                        go.Scatter(
-                                            x=time,
-                                            y=gsc_signal,
-                                            mode='lines',
-                                            name='GSC',
-                                            line=dict(color='blue'),
-                                            hovertext=[f'Time: {time[i]}<br>GSC: {gsc_signal[i]}' for i in range(len(time))]
-                                        ),
-                                        go.Scatter(
-                                            x=time,
-                                            y=eda_tonic,
-                                            mode='lines',
-                                            name='EDA Tonic',
-                                            line=dict(color='green'),
-                                            hovertext=[f'Time: {time[i]}<br>EDA Tonic: {eda_tonic[i]}' for i in range(len(time))]
-                                        ),
-                                        go.Scatter(
-                                            x=time,
-                                            y=eda_phasic,
-                                            mode='lines',
-                                            name='EDA Phasic',
-                                            line=dict(color='red'),
-                                            hovertext=[f'Time: {time[i]}<br>EDA Phasic: {eda_phasic[i]}' for i in range(len(time))]
-                                        ),
-                                        go.Scatter(
-                                            x = scr_onsets_time,
-                                            y = [origin_gsc[i] for i in scr_onsets_index],
-                                            mode = 'markers',
-                                            name = 'SCR Onsets',
-                                            marker = dict(symbol='x', color='green'),
-                                            hovertext=[f'Time: {scr_onsets_time[i]}<br>SCR Onset: {gsc_signal[i]}' for i in range(len(scr_onsets_time))]
-                                        ),
-                                        go.Scatter(
-                                            x = scr_peaks_time,
-                                            y = [origin_gsc[i] for i in scr_peak_index],
-                                            mode = 'markers',
-                                            name = 'SCR Peaks',
-                                            marker = dict(symbol='x', color='red'),
-                                            hovertext=[f'Time: {scr_peaks_time[i]}<br>SCR Peak: {gsc_signal[i]}' for i in range(len(scr_peaks_time))]
-                                        ),
-                                        go.Scatter(
-                                            x = scr_recovery_time,
-                                            y = [origin_gsc[i] for i in scr_recovery_index],
-                                            mode = 'markers',
-                                            name = 'SCR Recovery',
-                                            marker = dict(symbol='x', color='yellow'),
-                                            hovertext=[f'Time: {scr_recovery_time[i]}<br>SCR Recovery: {gsc_signal[i]}' for i in range(len(scr_recovery_time))]
-                                        ),
-                                    ],
-                                    'layout': {
-                                        'title': 'GSC Signal',
-                                        'xaxis': {'title': 'Time'},
-                                        'yaxis': {'title': 'GSC'},
-                                        'hovermode': 'closest'
-                                    }
-                                }
-                            )
-                    
-                    print(f'Graph created...')
-                    
-                    
-                    graph_layout = html.Div([
-                        
-                        graph,
-                        dbc.Row([
-                            dbc.Col(
-                                dbc.Container(
-                                    [
-                                        dbc.Button(
-                                        'Save Changes',
-                                        id={
-                                            'type': 'save-changes-button',
-                                            'index': 1
-                                        },
-                                        n_clicks=0,
-                                        style={'margin': 'auto', 'textAlign': 'center'}
-                                        ),
-                                        dcc.Loading(
-                                            [dcc.ConfirmDialog(
-                                                id={
-                                                    'type': 'save-changes-confirm',
-                                                    'index': 1
-                                                    },
-                                                    message='',
-                                            )],
-                                            overlay_style={"visibility": "visible", 
-                                            "opacity": 0.5,
-                                            "background": "white"},
-                                            custom_spinner=html.H2(["Saving changes...", dbc.Spinner(color="primary")]),
-                                        ),
-                                        dbc.Modal(
-                                            [
-                                                dbc.ModalHeader("Are you sure you want to save the changes?"),
-                                                dbc.ModalBody([
-                                                    html.Div('Please make sure the changes are correct before saving.'),
-                                                    dbc.Button('Save', id={
-                                                        'type': 'save-changes-confirm-button',
-                                                        'index': 1
-                                                    }, style={'margin': 'auto', 'textAlign': 'center'})
-                                            ]),
-                                                dbc.ModalFooter(
-                                                    dbc.Button('Close', id={
-                                                        'type': 'save-changes-close-button',
-                                                        'index': 1
-                                                    })
-                                                ),
-                                            ],
-                                            id={
-                                                'type': 'save-changes-modal',
-                                                'index': 1
-                                            },
-                                            is_open=False    
-                                        ),
-                                        dcc.ConfirmDialog(
-                                            id={
-                                                'type': 'no-changes-confirm',
-                                                'index': 1
-                                            },
-                                            message='No changes were made.'
-                                        )
-                                        
-                                    ]),                        
-                            ),
-                                dbc.Col(
-                                    html.Div(
-                                        id={
-                                            'type': 'changes-ecg',
-                                            'index': 1
-                                        },
-                                        children=[]
-                                    
-                                    ),
-                                ),
-                                dbc.Col(
-                                    html.Div(
-                                        id={
-                                            'type': 'changes-gsc',
-                                            'index': 1
-                                        },
-                                        children=[]
-                                    )
-                                )]
-                        )
-                    ]
-                )
-                    
-                    return graph_layout
-            
-
-
-                elif gsc_or_ecg == 'ecg':
-                    print(f'Plotting ECG signal...')
-
-                    if signal_attributes == {}:
-                        return html.Div("No ECG data available for this subject.", style={"color": "red", "fontSize": 20})
-
-                    graph = dcc.Graph(
-                        id={
-                            'type': 'ecg-plot',
-                            'index': 1
-                        },
-                        figure={
-                            'data': [
-                                go.Scatter(
-                                    x=time,
-                                    y=[x*1 for x in motion],
-                                    mode='lines',
-                                    name='Motion',
-                                    line=dict(color='black'),
-                                    hovertext=[f'Time: {time[i]}<br>Motion: {motion[i]}' for i in range(len(time))]
-                                ),
-                                go.Scatter(
-                                    x=time,
-                                    y=ecg_signal,
-                                    mode='lines',
-                                    name='ECG',
-                                    line=dict(color='blue'),
-                                    hovertext=[f'Time: {time[i]}<br>ECG: {ecg_signal[i]}' for i in range(len(time))]
-                                ),
-                                go.Scatter(
-                                    x=rpeaks_time,
-                                    y=[origin_ecg[i] for i in rpeaks_index],
-                                    mode='markers',
-                                    name='R-Peaks',
-                                    # marker color is yellow if the peak is a yellow peak, if not - red
-                                    marker=dict(color=['yellow' if i in signal_attributes['yellow_peaks'] else 'red' for i in rpeaks_index]),
-                                    hovertext=[f'Time: {rpeaks_time[i]}<br>R-Peak: {ecg_signal[i]} <br>Quality: {rpeaks_quality[i]}' for i in range(len(rpeaks_time))]
-                                ),
-                                go.Scatter(
-                                    x=ectopic_beats_time,
-                                    y=[origin_ecg[i] for i in ectopic_beats_index],
-                                    mode='markers',
-                                    name='Ectopic Beats',
-                                    marker=dict(symbol='x', color='black'),
-                                    hovertext=[f'Time: {rpeaks_time[i]}<br>Ectopic Beat: {ecg_signal[i]}' for i in range(len(rpeaks_time))]
-                                ),
-                                go.Scatter(
-                                    x=long_short_beats_time,
-                                    y=[origin_ecg[i] for i in long_short_beats_index],
-                                    mode='markers',
-                                    name='Long/Short Beats',
-                                    marker=dict(symbol='x', color='green'),
-                                    hovertext=[f'Time: {rpeaks_time[i]}<br>Long/Short Beat: {ecg_signal[i]}' for i in range(len(rpeaks_time))]
-                                ),
-                                go.Scatter(
-                                    x=false_negative_beats_time,
-                                    y=[origin_ecg[i] for i in false_negative_beats_index],
-                                    mode='markers',
-                                    name='False Negative Beats',
-                                    marker=dict(symbol='x', color='red'),
-                                    hovertext=[f'Time: {rpeaks_time[i]}<br>False Negative Beat: {ecg_signal[i]}' for i in range(len(rpeaks_time))]
-                                ),
-                                go.Scatter(
-                                    x=false_positive_beats_time,
-                                    y=[origin_ecg[i] for i in false_positive_beats_index],
-                                    mode='markers',
-                                    name='False Positive Beats',
-                                    marker=dict(symbol='x', color='yellow'),
-                                    hovertext=[f'Time: {rpeaks_time[i]}<br>False Positive Beat: {ecg_signal[i]}' for i in range(len(rpeaks_time))]
-                                ),
-                                
-                            ],
-
-                            'layout': {
-                                'title': 'ECG Signal',
-                                'xaxis': {'title': 'Time'},
-                                'yaxis': {'title': 'ECG'},
-                                'hovermode': 'closest'
-                            }
-                        }
-
-                    )
-
-                    graph_layout = html.Div([
-                        
-                        graph,
-                        dbc.Row([
-                            dbc.Col(
-                                dbc.Container(
-                                    [
-                                        dbc.Button(
-                                        'Save Changes',
-                                        id={
-                                            'type': 'save-changes-button',
-                                            'index': 1
-                                        },
-                                        n_clicks=0,
-                                        style={'margin': 'auto', 'textAlign': 'center'}
-                                        ),
-                                        dcc.Loading(
-                                            [dcc.ConfirmDialog(
-                                                id={
-                                                    'type': 'save-changes-confirm',
-                                                    'index': 1
-                                                    },
-                                                    message='',
-                                            )],
-                                            overlay_style={"visibility": "visible", 
-                                            "opacity": 0.5,
-                                            "background": "white"},
-                                            custom_spinner=html.H2(["Saving changes...", dbc.Spinner(color="primary")]),
-                                        ),
-                                        dbc.Modal(
-                                            [
-                                                dbc.ModalHeader("Are you sure you want to save the changes?"),
-                                                dbc.ModalBody([
-                                                    html.Div('Please make sure the changes are correct before saving.'),
-                                                    dbc.Button('Save', id={
-                                                        'type': 'save-changes-confirm-button',
-                                                        'index': 1
-                                                    }, style={'margin': 'auto', 'textAlign': 'center'})
-                                            ]),
-                                                dbc.ModalFooter(
-                                                    dbc.Button('Close', id={
-                                                        'type': 'save-changes-close-button',
-                                                        'index': 1
-                                                    })
-                                                ),
-                                            ],
-                                            id={
-                                                'type': 'save-changes-modal',
-                                                'index': 1
-                                            },
-                                            is_open=False    
-                                        ),
-                                        dcc.ConfirmDialog(
-                                            id={
-                                                'type': 'no-changes-confirm',
-                                                'index': 1
-                                            },
-                                            message='No changes were made.'
-                                        )
-                                        
-                                    ]),                        
-                            ),
-                                dbc.Col(
-                                    html.Div(
-                                        id={
-                                            'type': 'changes-ecg',
-                                            'index': 1
-                                        },
-                                        children=[]
-                                    
-                                    ),
-                                ),
-                                dbc.Col(
-                                    html.Div(
-                                        id={
-                                            'type': 'changes-gsc',
-                                            'index': 1
-                                        },
-                                        children=[]
-                                    )
-                                )]
-                            ),
-                            dbc.Row([
-                                dbc.Col(
-                                    dcc.Slider(0.0,
-                                                1.0,
-                                                0.01,
-                                                marks = {i: str(round(i,2)) for i in np.arange(0.0, 1.0, 0.05)},
-                                                value=0.5,
-                                                id={
-                                                    'type': 'slider-ecg',
-                                                    'index': 1
-                                                }),
-                                ),
-                            ]),
-                            dbc.Row([
-                                html.Div(
-                                    id={
-                                        'type': 'slider-output-ecg',
-                                        'index': 1
-                                    }
-                                )
-                            ])
-                    ]
-                )
-
-                    return graph_layout
-            except Exception as e:
-                print(f'Error plotting signals: {e}')
-                return html.Div("Error plotting signals, check if there is data in the subject's data folder.", style={"color": "red", "fontSize": 20})
-
-
-        
-        elif 'signal' not in signals.columns and 'gsc' in signals.columns:
-            try:
-                if gsc_or_ecg == 'gsc':
-                    gsc_signal = signals['gsc'].to_list()
-                    eda_tonic = signals['eda_tonic'].to_list()
-                    eda_phasic = signals['eda_phasic'].to_list()
-
-                print(f'gsc_signal: {gsc_signal[:5]}')
-                time = signals['time'].to_list()
-                motion = signals['motion'].to_list()
-
-                if gsc_or_ecg == 'gsc':
-
-                    scr_onset = gsc_attributes['SCR_Onsets']
-                    scr_onset = [original_time[i] for i in scr_onset]
-                    scr_onsets_time = [i for i in scr_onset if i >= event_start_time and i <= event_end_time]
-                    scr_onsets_index = [i for i in range(len(original_time)) if original_time[i] in scr_onsets_time]
-                    print(f'scr_onset: {scr_onset}')
-
-
-                    print(f'scr_onsets_time: {scr_onsets_time}')
-                    scr_peak = gsc_attributes['SCR_Peaks']
-                    scr_peak = [original_time[i] for i in scr_peak]
-                    scr_peaks_time = [i for i in scr_peak if i >= event_start_time and i <= event_end_time]
-                    scr_peak_index = [i for i in range(len(original_time)) if original_time[i] in scr_peaks_time]
-
-                    print(f'scr_peak: {scr_peak}')
-
-                    print(f'scr_peaks_time: {scr_peaks_time}')
-
-                    scr_height = gsc_attributes['SCR_Height']
-
-                    print(f'scr_height: {scr_height}')
-                    scr_amplitude = gsc_attributes['SCR_Amplitude']
-
-                    print(f'scr_amplitude: {scr_amplitude}')
-                    scr_risetime = gsc_attributes['SCR_RiseTime']
-
-                    print(f'scr_risetime: {scr_risetime}')
-                    scr_recovery = gsc_attributes['SCR_Recovery']
-                    
-                    scr_recovery = [int(x) for x in scr_recovery]
-
-                    scr_recovery = [original_time[i] for i in scr_recovery]
-
-                    scr_recovery_time = [i for i in scr_recovery if i >= event_start_time and i <= event_end_time]
-
-                    scr_recovery_index = [i for i in range(len(original_time)) if original_time[i] in scr_recovery_time]
-
-                    print(f'scr_recovery: {scr_recovery}')
-
-                    scr_recoverytime = gsc_attributes['SCR_RecoveryTime']
-
-                    print(f'scr_recoverytime: {scr_recoverytime}')
-
-                if gsc_or_ecg == 'gsc':
-                        if gsc_attributes == {}:
-                            return html.Div("No GSC data available for this subject.", style={"color": "red", "fontSize": 20})
-                        
-                        graph = dcc.Graph(
-                                id={
-                                    'type': 'gsc-plot',
-                                    'index': 1
-                                },
-                                figure={
-                                    'data': [
-                                        go.Scatter(
-                                            x=time,
-                                            y=[x*0.1 for x in motion],
-                                            mode='lines',
-                                            name='Motion',
-                                            line=dict(color='black'),
-                                            hovertext=[f'Time: {time[i]}<br>Motion: {motion[i]}' for i in range(len(time))]
-                                        ),
-                                        go.Scatter(
-                                            x=time,
-                                            y=gsc_signal,
-                                            mode='lines',
-                                            name='GSC',
-                                            line=dict(color='blue'),
-                                            hovertext=[f'Time: {time[i]}<br>GSC: {gsc_signal[i]}' for i in range(len(time))]
-                                        ),
-                                        go.Scatter(
-                                            x=time,
-                                            y=eda_tonic,
-                                            mode='lines',
-                                            name='EDA Tonic',
-                                            line=dict(color='green'),
-                                            hovertext=[f'Time: {time[i]}<br>EDA Tonic: {eda_tonic[i]}' for i in range(len(time))]
-                                        ),
-                                        go.Scatter(
-                                            x=time,
-                                            y=eda_phasic,
-                                            mode='lines',
-                                            name='EDA Phasic',
-                                            line=dict(color='red'),
-                                            hovertext=[f'Time: {time[i]}<br>EDA Phasic: {eda_phasic[i]}' for i in range(len(time))]
-                                        ),
-                                        
-                                        go.Scatter(
-                                            x = scr_onsets_time,
-                                            y = [origin_gsc[i] for i in scr_onsets_index],
-                                            mode = 'markers',
-                                            name = 'SCR Onsets',
-                                            marker = dict(symbol='x', color='green'),
-                                            hovertext=[f'Time: {scr_onsets_time[i]}<br>SCR Onset: {gsc_signal[i]}' for i in range(len(scr_onsets_time))]
-                                        ),
-                                        go.Scatter(
-                                            x = scr_peaks_time,
-                                            y = [origin_gsc[i] for i in scr_peak_index],
-                                            mode = 'markers',
-                                            name = 'SCR Peaks',
-                                            marker = dict(symbol='x', color='red'),
-                                            hovertext=[f'Time: {scr_peaks_time[i]}<br>SCR Peak: {gsc_signal[i]}' for i in range(len(scr_peaks_time))]
-                                        ),
-                                        go.Scatter(
-                                            x = scr_recovery_time,
-                                            y = [origin_gsc[i] for i in scr_recovery_index],
-                                            mode = 'markers',
-                                            name = 'SCR Recovery',
-                                            marker = dict(symbol='x', color='yellow'),
-                                            hovertext=[f'Time: {scr_recovery_time[i]}<br>SCR Recovery: {gsc_signal[i]}' for i in range(len(scr_recovery_time))]
-                                        ),
-                                    ],
-                                    'layout': {
-                                        'title': 'GSC Signal',
-                                        'xaxis': {'title': 'Time'},
-                                        'yaxis': {'title': 'GSC'},
-                                        'hovermode': 'closest'
-                                    }
-                                }
-                            )
-                        
-                elif gsc_or_ecg == 'ecg':
-                    return html.Div("No ECG signal to plot", style={"color": "red", "fontSize": 20})
-                
-                graph_layout = html.Div([
-                        
-                        graph,
-                        dbc.Row([
-                            dbc.Col(
-                                dbc.Container(
-                                    [
-                                        dbc.Button(
-                                        'Save Changes',
-                                        id={
-                                            'type': 'save-changes-button',
-                                            'index': 1
-                                        },
-                                        n_clicks=0,
-                                        style={'margin': 'auto', 'textAlign': 'center'}
-                                        ),
-                                        dcc.Loading(
-                                            [dcc.ConfirmDialog(
-                                                id={
-                                                    'type': 'save-changes-confirm',
-                                                    'index': 1
-                                                    },
-                                                    message='',
-                                            )],
-                                            overlay_style={"visibility": "visible", 
-                                            "opacity": 0.5,
-                                            "background": "white"},
-                                            custom_spinner=html.H2(["Saving changes...", dbc.Spinner(color="primary")]),
-                                        ),
-                                        dbc.Modal(
-                                            [
-                                                dbc.ModalHeader("Are you sure you want to save the changes?"),
-                                                dbc.ModalBody([
-                                                    html.Div('Please make sure the changes are correct before saving.'),
-                                                    dbc.Button('Save', id={
-                                                        'type': 'save-changes-confirm-button',
-                                                        'index': 1
-                                                    }, style={'margin': 'auto', 'textAlign': 'center'})
-                                            ]),
-                                                dbc.ModalFooter(
-                                                    dbc.Button('Close', id={
-                                                        'type': 'save-changes-close-button',
-                                                        'index': 1
-                                                    })
-                                                ),
-                                            ],
-                                            id={
-                                                'type': 'save-changes-modal',
-                                                'index': 1
-                                            },
-                                            is_open=False    
-                                        ),
-                                        dcc.ConfirmDialog(
-                                            id={
-                                                'type': 'no-changes-confirm',
-                                                'index': 1
-                                            },
-                                            message='No changes were made.'
-                                        )
-                                        
-                                    ]),                        
-                            ),
-                                dbc.Col(
-                                    html.Div(
-                                        id={
-                                            'type': 'changes-ecg',
-                                            'index': 1
-                                        },
-                                        children=[]
-                                    
-                                    ),
-                                ),
-                                dbc.Col(
-                                    html.Div(
-                                        id={
-                                            'type': 'changes-gsc',
-                                            'index': 1
-                                        },
-                                        children=[]
-                                    )
-                                )]
-                        )
-                    ]
-                )
-                    
-                return graph_layout
-            except Exception as e:
-                print(f'Error plotting signals: {e}')
-                return html.Div("Error plotting signals, check if there is data in the subject's data folder.", style={"color": "red", "fontSize": 20})
-        
-        elif 'signal' in signals.columns and 'gsc' not in signals.columns:
-        
-            time = signals['time'].to_list()
-
-            motion = signals['motion'].to_list()
-            
-            if gsc_or_ecg == 'ecg':
-                print(f'time: {time[:5]}')
-                ecg_signal = signals['signal'].to_list()
-
-                ecg_quality = nk.ecg_quality(origin_ecg, sampling_rate=500)
-
-            
-
-                rpeaks = rpeaks_index_df[0].values.tolist()
-
-                rpeaks_time = [original_time[i] for i in rpeaks]
-
-                rpeaks_time = [i for i in rpeaks_time if i >= event_start_time and i <= event_end_time]
-                rpeaks_index = [i for i in range(len(original_time)) if original_time[i] in rpeaks_time]
-                rpeaks_quality = [ecg_quality[i] for i in rpeaks_index]
-
-
-                print(f'rpeaks_quality: {rpeaks_quality}')
-                print(f'rpeaks_time: {rpeaks_time}')
-                yellow_peaks_time = signal_attributes['yellow_peaks']
-                yellow_peaks_time = [original_time[i] for i in yellow_peaks_time]
-                yellow_peaks_time = [i for i in yellow_peaks_time if i >= event_start_time and i <= event_end_time]
-                yellow_peaks_index = [i for i in range(len(original_time)) if original_time[i] in yellow_peaks_time]
-
-                print(f'yellow_peaks_time: {yellow_peaks_time}')
-                ectopic_beats_time = signal_attributes['ectopic_beats']
-                print(f'ectopic_beats_time: {ectopic_beats_time}')
-                ectopic_beats_time = [original_time[i] for i in ectopic_beats_time]
-                ectopic_beats_time = [i for i in ectopic_beats_time if i >= event_start_time and i <= event_end_time]
-                ectopic_beats_index = [i for i in range(len(original_time)) if original_time[i] in ectopic_beats_time]
-
-                print(f'ectopic_beats_time: {ectopic_beats_time}')
-                long_short_beats_time = signal_attributes['longshort_beats']
-                print(f'long_short_beats_time: {long_short_beats_time}')
-                long_short_beats_time = [original_time[i] for i in long_short_beats_time]
-                long_short_beats_time = [i for i in long_short_beats_time if i >= event_start_time and i <= event_end_time]
-                long_short_beats_index = [i for i in range(len(original_time)) if original_time[i] in long_short_beats_time]
-
-
-                print(f'long_short_beats_time: {long_short_beats_time}')
-                false_negative_beats_time = signal_attributes['false_negatives']
-                print(f'false_negative_beats_time: {false_negative_beats_time}')
-                false_negative_beats_time = [original_time[i] for i in false_negative_beats_time]
-                false_negative_beats_time = [i for i in false_negative_beats_time if i >= event_start_time and i <= event_end_time]
-                false_negative_beats_index = [i for i in range(len(original_time)) if original_time[i] in false_negative_beats_time]
-
-
-                print(f'false_negative_beats_time: {false_negative_beats_time}')
-                false_positive_beats_time = signal_attributes['false_positives']
-                print(f'false_positive_beats_time: {false_positive_beats_time}')
-                false_positive_beats_time = [original_time[i] for i in false_positive_beats_time]
-                false_positive_beats_time = [i for i in false_positive_beats_time if i >= event_start_time and i <= event_end_time]
-                false_positive_beats_index = [i for i in range(len(original_time)) if original_time[i] in false_positive_beats_time]
-
-            if gsc_or_ecg == 'gsc':
-                return html.Div("No GSC signal to plot", style={"color": "red", "fontSize": 20})
-            
-            elif gsc_or_ecg == 'ecg':
-                if signal_attributes == {}:
-                    return html.Div("No ECG data available for this subject.", style={"color": "red", "fontSize": 20})
-                graph = dcc.Graph(
-                    id={
-                        'type': 'ecg-plot',
-                        'index': 1
-                    },
-                    figure={
-                        'data': [
-                            go.Scatter(
-                                x=time,
-                                y=[x*1 for x in motion],
-                                mode='lines',
-                                name='Motion',
-                                line=dict(color='black'),
-                                hovertext=[f'Time: {time[i]}<br>Motion: {motion[i]}' for i in range(len(time))]
-                            ),
-                            go.Scatter(
-                                x=time,
-                                y=ecg_signal,
-                                mode='lines',
-                                name='ECG',
-                                line=dict(color='blue'),
-                                hovertext=[f'Time: {time[i]}<br>ECG: {ecg_signal[i]}' for i in range(len(time))]
-                            ),
-                            go.Scatter(
-                                x=rpeaks_time,
-                                y=[origin_ecg[i] for i in rpeaks_index],
-                                mode='markers',
-                                name='R-Peaks',
-                                # marker color is yellow if the peak is a yellow peak, if not - red
-                                marker=dict(color=['yellow' if i in signal_attributes['yellow_peaks'] else 'red' for i in rpeaks_index]),
-                                hovertext=[f'Time: {rpeaks_time[i]}<br>R-Peak: {origin_ecg[i]} <br>Quality: {rpeaks_quality[i]}' for i in range(len(rpeaks_index))]
-                            ),
-                            go.Scatter(
-                                x=ectopic_beats_time,
-                                y=[origin_ecg[i] for i in signal_attributes['ectopic_beats']],
-                                mode='markers',
-                                name='Ectopic Beats',
-                                marker=dict(symbol='x', color='black'),
-                                hovertext=[f'Time: {rpeaks_time[i]}<br>Ectopic Beat: {origin_ecg[i]}' for i in range(len(rpeaks_time))]
-                            ),
-                            go.Scatter(
-                                x=long_short_beats_time,
-                                y=[origin_ecg[i] for i in signal_attributes['longshort_beats']],
-                                mode='markers',
-                                name='Long/Short Beats',
-                                marker=dict(symbol='x', color='green'),
-                                hovertext=[f'Time: {rpeaks_time[i]}<br>Long/Short Beat: {origin_ecg[i]}' for i in range(len(rpeaks_time))]
-                            ),
-                            go.Scatter(
-                                x=false_negative_beats_time,
-                                y=[origin_ecg[i] for i in signal_attributes['false_negatives']],
-                                mode='markers',
-                                name='False Negative Beats',
-                                marker=dict(symbol='x', color='red'),
-                                hovertext=[f'Time: {rpeaks_time[i]}<br>False Negative Beat: {origin_ecg[i]}' for i in range(len(rpeaks_time))]
-                            ),
-                            go.Scatter(
-                                x=false_positive_beats_time,
-                                y=[origin_ecg[i] for i in signal_attributes['false_positives']],
-                                mode='markers',
-                                name='False Positive Beats',
-                                marker=dict(symbol='x', color='yellow'),
-                                hovertext=[f'Time: {rpeaks_time[i]}<br>False Positive Beat: {origin_ecg[i]}' for i in range(len(rpeaks_time))]
-                            ),
-                            
-                        ],
-
-                        'layout': {
-                            'title': 'ECG Signal',
-                            'xaxis': {'title': 'Time'},
-                            'yaxis': {'title': 'ECG'},
-                            'hovermode': 'closest'
-                        }
-                    }
-
-                )
-
-                graph_layout = html.Div([
-                        
-                        graph,
-                        
-                        dbc.Row([
-                        dbc.Col(
-                            dbc.Container(
-                                [
-                                    dbc.Button(
-                                    'Save Changes',
-                                    id={
-                                        'type': 'save-changes-button',
-                                        'index': 1
-                                    },
-                                    n_clicks=0,
-                                    style={'margin': 'auto', 'textAlign': 'center'}
-                                    ),
-                                    dcc.Loading(
-                                        [dcc.ConfirmDialog(
-                                            id={
-                                                'type': 'save-changes-confirm',
-                                                'index': 1
-                                                },
-                                                message='',
-                                        )],
-                                        overlay_style={"visibility": "visible", 
-                                        "opacity": 0.5,
-                                        "background": "white"},
-                                        custom_spinner=html.H2(["Saving changes...", dbc.Spinner(color="primary")]),
-                                    ),
-                                    dbc.Modal(
-                                        [
-                                            dbc.ModalHeader("Are you sure you want to save the changes?"),
-                                            dbc.ModalBody([
-                                                html.Div('Please make sure the changes are correct before saving.'),
-                                                dbc.Button('Save', id={
-                                                    'type': 'save-changes-confirm-button',
-                                                    'index': 1
-                                                }, style={'margin': 'auto', 'textAlign': 'center'})
-                                        ]),
-                                            dbc.ModalFooter(
-                                                dbc.Button('Close', id={
-                                                    'type': 'save-changes-close-button',
-                                                    'index': 1
-                                                })
-                                            ),
-                                        ],
-                                        id={
-                                            'type': 'save-changes-modal',
-                                            'index': 1
-                                        },
-                                        is_open=False    
-                                    ),
-                                    dcc.ConfirmDialog(
-                                        id={
-                                            'type': 'no-changes-confirm',
-                                            'index': 1
-                                        },
-                                        message='No changes were made.'
-                                    )
-                                    
-                                ]),                        
-                        ),
-                            dbc.Col(
-                                html.Div(
-                                    id={
-                                        'type': 'changes-ecg',
-                                        'index': 1
-                                    },
-                                    children=[]
-                                
-                                ),
-                            ),
-                            dbc.Col(
-                                html.Div(
-                                    id={
-                                        'type': 'changes-gsc',
-                                        'index': 1
-                                    },
-                                    children=[]
-                                )
-                            )]
-                    ),
-                        dbc.Row([
-                            dbc.Col(
-                                dcc.Slider(0.0,
-                                            1.0,
-                                            0.01,
-                                            marks = {i: str(round(i,2)) for i in np.arange(0.0, 1.0, 0.05)},
-                                            value=0.5,
-                                            id={
-                                                'type': 'slider-ecg',
-                                                'index': 1
-                                            }),
-                            ),
-                        ]),
-                        dbc.Row([
-                            html.Div(
-                                id={
-                                    'type': 'slider-output-ecg',
-                                    'index': 1
-                                }
-                            )
-                        ])
-                ]
-            )
-
-                return graph_layout
-                
-            # except Exception as e:
-            #     print(f'Error plotting signals: {e}')
-            #     return html.Div("Error plotting signals, check if there is data in the subject's data folder.", style={"color": "red", "fontSize": 20})
-            
-
-
+    if not selectedRows or not selectedRows[0] or not gsc_or_ecg:
+        return []
+    row = selectedRows[0][0]
+    subject = row["subject_id"]
+    event = row["event_name"]
+    mode = gsc_or_ecg[0]
+    manager = get_data_manager(project)
+    message_style = {"color": "red", "fontSize": 20}
+
+    try:
+        bounds = (
+            pl.scan_parquet(manager.events_parquet_path)
+            .filter((pl.col("subject_id") == subject) & (pl.col("event_name") == event))
+            .select("start_time", "end_time").head(1).collect()
+        )
+        if bounds.is_empty():
+            return html.Div(f"No event data for {subject}, {event}.", style=message_style)
+        start, end = bounds.row(0)
+
+        subject_signals = manager.scan_subject_signal(subject)
+        schema = subject_signals.collect_schema()
+        channel = "signal" if mode == "ecg" else "gsc"
+        if channel not in schema:
+            return html.Div(f"{mode.upper()} is unavailable for {subject}.", style=message_style)
+        columns = ["time", "motion", channel]
+        columns.extend(name for name in ("eda_tonic", "eda_phasic") if mode == "gsc" and name in schema)
+        event_signal = (
+            subject_signals.filter(pl.col("time").is_between(start, end))
+            .select(columns).sort("time").collect().to_pandas()
+        )
+        if event_signal.empty:
+            return html.Div(f"No signal samples for {subject}, {event}.", style=message_style)
+
+        attributes = manager.load_subject_attributes(subject, include_quality=False) or {}
+        sample_columns = ["time", channel]
+        if mode == "ecg" and "quality" in schema:
+            sample_columns.append("quality")
+        samples = subject_signals.select(sample_columns).collect()
+        original_time = samples["time"].to_numpy()
+        original_signal = samples[channel].to_numpy()
+        for col in (channel, "motion"):
+            values = event_signal[col]
+            deviation = values.std()
+            if pd.notna(deviation) and deviation > 0:
+                event_signal[col] = (values - values.mean()) / deviation
+
+        time = event_signal["time"].to_list()
+        motion = event_signal["motion"].to_list()
+        if mode == "gsc":
+            return plot_gsc_signals(event_signal, time, motion, original_signal,
+                                    attributes.get("gsc_attributes", {}), original_time, start, end)
+
+        _apply_yellow_peak_corrections(project, subject, original_time, attributes)
+        if "quality" in samples.columns:
+            quality = samples["quality"].to_numpy()
         else:
-            return html.Div("No signals to plot", style={"color": "red", "fontSize": 20})
-        
+            quality = attributes.get("quality")
+        if (quality is None or len(quality) != len(original_time)) and attributes.get("rpeaks"):
+            with open(TEMPLATES_PATH / f"{project}_template.json", encoding="utf-8") as file:
+                rate = json.load(file)["parameters"]["sampling_rate"]
+            quality = nk.ecg_quality(original_signal, sampling_rate=rate)
+        return plot_ecg_signals(event_signal, time, motion, original_signal, attributes,
+                                original_time, start, end, quality)
+    except Exception:
+        logger.exception("Unable to plot project %s, subject %s, event %s", project, subject, event)
+        return html.Div(f"Could not plot {subject}, {event}. See the app log for details.", style=message_style)
 
+
+def _apply_yellow_peak_corrections(project, subject, original_time, attributes):
+    path = DATA_PATH / f"{project}_UpdatedData.json"
+    if not path.exists() or len(original_time) == 0:
+        return
+    with open(path, encoding="utf-8") as file:
+        updates = json.load(file)
+    corrected = set(attributes.get("yellow_peaks", []))
+    sorted_time = np.all(original_time[1:] >= original_time[:-1])
+    for update in updates:
+        subject_updates = update.get(project, {}).get(subject, {})
+        for event in subject_updates.values():
+            for timestamp, color in event.items():
+                if timestamp == "artifact_percentage" or color != "yellow":
+                    continue
+                target = float(timestamp)
+                if sorted_time:
+                    right = min(int(np.searchsorted(original_time, target)), len(original_time) - 1)
+                    left = max(0, right - 1)
+                    index = min((left, right), key=lambda i: abs(original_time[i] - target))
+                else:
+                    index = int(np.argmin(np.abs(original_time - target)))
+                corrected.add(index)
+    attributes["yellow_peaks"] = sorted(corrected)
+
+
+def plot_gsc_signals(signals, time, motion, origin_gsc, gsc_attributes, original_time, event_start_time, event_end_time):
+    """Plot GSC signals with SCR features"""
+    gsc_signal = signals['gsc'].to_list()
+    eda_tonic = signals['eda_tonic'].to_list() if 'eda_tonic' in signals else [0] * len(time)
+    eda_phasic = signals['eda_phasic'].to_list() if 'eda_phasic' in signals else [0] * len(time)
+
+    # Handle missing GSC attributes gracefully
+    if not gsc_attributes or gsc_attributes == {}:
+        scr_onsets_time = []
+        scr_peaks_time = []
+        scr_recovery_time = []
+        scr_onsets_index = []
+        scr_peak_index = []
+        scr_recovery_index = []
+    else:
+        # Process SCR features
+        scr_onset = gsc_attributes.get('SCR_Onsets', [])
+        scr_onset = [original_time[i] for i in scr_onset if i < len(original_time)]
+        scr_onsets_time = [i for i in scr_onset if i >= event_start_time and i <= event_end_time]
+        scr_onsets_index = [i for i in range(len(original_time)) if original_time[i] in scr_onsets_time]
+        
+        scr_peak = gsc_attributes.get('SCR_Peaks', [])
+        scr_peak = [original_time[i] for i in scr_peak if i < len(original_time)]
+        scr_peaks_time = [i for i in scr_peak if i >= event_start_time and i <= event_end_time]
+        scr_peak_index = [i for i in range(len(original_time)) if original_time[i] in scr_peaks_time]
+        
+        scr_recovery = gsc_attributes.get('SCR_Recovery', [])
+        scr_recovery = [int(x) for x in scr_recovery if not np.isnan(float(x)) and int(x) < len(original_time)]
+        scr_recovery = [original_time[i] for i in scr_recovery]
+        scr_recovery_time = [i for i in scr_recovery if i >= event_start_time and i <= event_end_time]
+        scr_recovery_index = [i for i in range(len(original_time)) if original_time[i] in scr_recovery_time]
+
+    graph = dcc.Graph(
+        id={'type': 'gsc-plot', 'index': 1},
+        figure={
+            'data': [
+                go.Scatter(
+                    x=time, y=[x*0.1 for x in motion], mode='lines', name='Motion',
+                    line=dict(color='black'),
+                    hovertext=[f'Time: {time[i]}<br>Motion: {motion[i]}' for i in range(len(time))]
+                ),
+                go.Scatter(
+                    x=time, y=gsc_signal, mode='lines', name='GSC',
+                    line=dict(color='blue'),
+                    hovertext=[f'Time: {time[i]}<br>GSC: {gsc_signal[i]}' for i in range(len(time))]
+                ),
+                go.Scatter(
+                    x=time, y=eda_tonic, mode='lines', name='EDA Tonic',
+                    line=dict(color='green'),
+                    hovertext=[f'Time: {time[i]}<br>EDA Tonic: {eda_tonic[i]}' for i in range(len(time))]
+                ),
+                go.Scatter(
+                    x=time, y=eda_phasic, mode='lines', name='EDA Phasic',
+                    line=dict(color='red'),
+                    hovertext=[f'Time: {time[i]}<br>EDA Phasic: {eda_phasic[i]}' for i in range(len(time))]
+                ),
+                go.Scatter(
+                    x=scr_onsets_time, y=[origin_gsc[i] if i < len(origin_gsc) else 0 for i in scr_onsets_index],
+                    mode='markers', name='SCR Onsets', marker=dict(symbol='x', color='green'),
+                    hovertext=[f'Time: {scr_onsets_time[i]}<br>SCR Onset' for i in range(len(scr_onsets_time))]
+                ),
+                go.Scatter(
+                    x=scr_peaks_time, y=[origin_gsc[i] if i < len(origin_gsc) else 0 for i in scr_peak_index],
+                    mode='markers', name='SCR Peaks', marker=dict(symbol='x', color='red'),
+                    hovertext=[f'Time: {scr_peaks_time[i]}<br>SCR Peak' for i in range(len(scr_peaks_time))]
+                ),
+                go.Scatter(
+                    x=scr_recovery_time, y=[origin_gsc[i] if i < len(origin_gsc) else 0 for i in scr_recovery_index],
+                    mode='markers', name='SCR Recovery', marker=dict(symbol='x', color='yellow'),
+                    hovertext=[f'Time: {scr_recovery_time[i]}<br>SCR Recovery' for i in range(len(scr_recovery_time))]
+                ),
+            ],
+            'layout': {'title': 'GSC Signal', 'xaxis': {'title': 'Time'}, 'yaxis': {'title': 'GSC'}, 'hovermode': 'closest'}
+        }
+    )
+
+    return create_graph_layout(graph)
+
+def plot_ecg_signals(signals, time, motion, origin_ecg, signal_attributes, original_time,
+                     event_start_time, event_end_time, ecg_quality):
+    """Plot ECG and use stored quality values for R-peak hover text."""
+    ecg_signal = signals["signal"].to_list()
+    rpeaks = signal_attributes.get("rpeaks", [])
+    if not rpeaks:
+        return html.Div("No R-peaks data available for ECG visualization.", style={"color": "red", "fontSize": 20})
+
+    def event_indices(indices):
+        return [i for i in indices if 0 <= i < len(original_time)
+                and event_start_time <= original_time[i] <= event_end_time]
+
+    rpeaks_index = event_indices(rpeaks)
+    rpeaks_time = [original_time[i] for i in rpeaks_index]
+    rpeaks_quality = [ecg_quality[i] for i in rpeaks_index] if ecg_quality is not None else []
+    event_peak_indices = np.searchsorted(time, rpeaks_time)
+    rpeaks_y = np.asarray(ecg_signal)[event_peak_indices].tolist()
+    yellow_peaks = set(signal_attributes.get("yellow_peaks", []))
+    ectopic_beats_index = event_indices(signal_attributes.get("ectopic_beats", []))
+    ectopic_beats_time = [original_time[i] for i in ectopic_beats_index]
+
+    graph = dcc.Graph(
+        id={'type': 'ecg-plot', 'index': 1},
+        figure={
+            'data': [
+                go.Scatter(
+                    x=time, y=[x*1 for x in motion], mode='lines', name='Motion',
+                    line=dict(color='black'),
+                    hovertext=[f'Time: {time[i]}<br>Motion: {motion[i]}' for i in range(len(time))]
+                ),
+                go.Scatter(
+                    x=time, y=ecg_signal, mode='lines', name='ECG',
+                    line=dict(color='blue'),
+                    hovertext=[f'Time: {time[i]}<br>ECG: {ecg_signal[i]}' for i in range(len(time))]
+                ),
+                go.Scatter(
+                    # x=rpeaks_time, y=[origin_ecg[i] if i < len(origin_ecg) else 0 for i in rpeaks_index],
+                    x=rpeaks_time, y=rpeaks_y,
+                    mode='markers', name='R-Peaks',
+                    marker=dict(color=['yellow' if i in yellow_peaks else 'red' for i in rpeaks_index]),
+                    hovertext=[f'Time: {rpeaks_time[i]}<br>R-Peak<br>Quality: {rpeaks_quality[i] if i < len(rpeaks_quality) else "N/A"}' for i in range(len(rpeaks_time))]
+                ),
+                go.Scatter(
+                    x=ectopic_beats_time, y=[origin_ecg[i] if i < len(origin_ecg) else 0 for i in ectopic_beats_index],
+                    mode='markers', name='Ectopic Beats', marker=dict(symbol='x', color='black'),
+                    hovertext=[f'Time: {ectopic_beats_time[i]}<br>Ectopic Beat' for i in range(len(ectopic_beats_time))]
+                ),
+            ],
+            'layout': {'title': 'ECG Signal', 'xaxis': {'title': 'Time'}, 'yaxis': {'title': 'ECG'}, 'hovermode': 'closest'}
+        }
+    )
+
+    # Add quality slider for ECG
+    return html.Div([
+        graph,
+        create_save_controls(),
+        dbc.Row([
+            dbc.Col(
+                dcc.Slider(0.0, 1.0, 0.01,
+                          marks={i: str(round(i,2)) for i in np.arange(0.0, 1.0, 0.05)},
+                          value=0.5, id={'type': 'slider-ecg', 'index': 1}),
+            ),
+        ]),
+        dbc.Row([html.Div(id={'type': 'slider-output-ecg', 'index': 1})])
+    ])
+
+def create_graph_layout(graph):
+    """Create the common graph layout with save controls"""
+    return html.Div([
+        graph,
+        create_save_controls()
+    ])
+
+def create_save_controls():
+    """Create the save controls section"""
+    return dbc.Row([
+        dbc.Col(
+            dbc.Container([
+                dbc.Button('Save Changes', id={'type': 'save-changes-button', 'index': 1},
+                          n_clicks=0, style={'margin': 'auto', 'textAlign': 'center'}),
+                dcc.Loading([
+                    dcc.ConfirmDialog(id={'type': 'save-changes-confirm', 'index': 1}, message='')
+                ], overlay_style={"visibility": "visible", "opacity": 0.5, "background": "white"},
+                custom_spinner=html.H2(["Saving changes...", dbc.Spinner(color="primary")])),
+                dbc.Modal([
+                    dbc.ModalHeader("Are you sure you want to save the changes?"),
+                    dbc.ModalBody([
+                        html.Div('Please make sure the changes are correct before saving.'),
+                        dbc.Button('Save', id={'type': 'save-changes-confirm-button', 'index': 1},
+                                  style={'margin': 'auto', 'textAlign': 'center'})
+                    ]),
+                    dbc.ModalFooter(dbc.Button('Close', id={'type': 'save-changes-close-button', 'index': 1})),
+                ], id={'type': 'save-changes-modal', 'index': 1}, is_open=False),
+                dcc.ConfirmDialog(id={'type': 'no-changes-confirm', 'index': 1},
+                                 message='No changes were made.')
+            ]),
+        ),
+        dbc.Col(html.Div(id={'type': 'changes-ecg', 'index': 1}, children=[])),
+        dbc.Col(html.Div(id={'type': 'changes-gsc', 'index': 1}, children=[]))
+    ])
+
+
+# ECG Plot Slider Callback
 @callback(
     Output({'type': 'ecg-plot', 'index': ALL}, 'figure', allow_duplicate=True),
     Output({'type': 'slider-output-ecg', 'index': ALL}, 'children'),
@@ -1520,7 +710,10 @@ def update_rpeaks_data(clickData, data, history_data, children, project, selecte
                 patched_figure['data'][2]['marker']['color'][clicked_rpeak_index] = new_rpeak_color
 
                 # Take the subject Id from the selected rows
-                sub_id = selectedRows[0][0]['Id']
+                print(f'selectedRows: {selectedRows}')
+                print(f'selectedRows[0]: {selectedRows[0]}')
+                print(f'selectedRows[0][0]: {selectedRows[0][0]}')
+                sub_id = selectedRows[0][0]['subject_id']
                 event = selectedRows[0][0]['event_name']
 
                 if data == []:
@@ -1643,134 +836,42 @@ def save_changes_confirm(n_clicks, data):
     if data == []:
         raise PreventUpdate
     
-    def save_signal_changes(data):
-        for project in list(data[0].keys()):  # Convert to list to avoid RuntimeError
-            print(f'project: {project}')
-            hdf_file = r'C:\Users\PsyLab-6028\Desktop\RoeeProj\pages\data\mindwareData'
+    confirm_message = "Changes saved successfully!"
+    try:
+        for project, subjects in data[0].items():
+            manager = get_data_manager(project)
+            updated_path = DATA_PATH / f"{project}_UpdatedData.json"
+            csv_path = DATA_PATH / f"{project}_UpdatedData.csv"
+            with manager.write_lock:
+                events_df = pl.read_parquet(manager.events_parquet_path).to_pandas()
+                if updated_path.exists():
+                    with open(updated_path, encoding="utf-8") as file:
+                        updates = json.load(file)
+                else:
+                    updates = []
 
-            hdf_file = os.path.join(hdf_file, f'{project}_mindware.hdf5')
+                for subject, events in subjects.items():
+                    time_values = set(manager.scan_subject_signal(subject, ["time"]).collect()["time"])
+                    if not time_values:
+                        raise ValueError(f"No signal samples for {subject}")
+                    updates.append({
+                        project: {subject: events},
+                        "last_updated": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        "status": "New",
+                    })
+                    for event, changes in events.items():
+                        timestamps = [float(t) for t in changes if t != "artifact_percentage"]
+                        if any(t in time_values for t in timestamps):
+                            mask = (events_df["subject_id"] == subject) & (events_df["event_name"] == event)
+                            events_df.loc[mask, "artifacts_percentage"] = changes["artifact_percentage"]
+                            events_df.loc[mask, "done"] = True
 
-            
-            if not os.path.exists(hdf_file):
-                return 'HDF file does not exist'
-
-            subjects = list(data[0][project].keys())
-
-            print(f'subjects: {subjects}')
-            
-            for sub_id in subjects:
-                print(f'sub_id: {sub_id}')
-                file = h5py.File(hdf_file, 'r')
-                print(f'file: {file}')
-
-                
-
-                try:
-                    signal_attributes = json.loads(file[sub_id]['rpeaks'].attrs['signal_attributes'].decode('utf-8'))
-                except:
-                    signal_attributes = json.loads(file[sub_id]['rpeaks'].attrs['signal_attributes'])
-
-                print(f'signal_attributes: {signal_attributes}')
-                file.close()
-
-                print('file closed...')
-
-                # events_df = pd.read_hdf(hdf_file, key='events_data')
-                events_df = pd.read_parquet(hdf_file.replace('.hdf5', '.parquet'))
-
-                signals_df = pd.read_hdf(hdf_file, key=f'{sub_id}/data')
-
-                print(f'signals_df: {signals_df.head()}')
-                time_v = signals_df['time'].to_list()
-
-                time_v = [float(x) for x in time_v]
-
-                print(f'time: {time_v[:5]}')
-
-    
-                for event in data[0][project][sub_id].keys():
-                    print(f'event: {event}')
-                    artifact_percentage = data[0][project][sub_id][event]['artifact_percentage']
-                    print(f'artifact_percentage: {artifact_percentage}')
-
-                    for time, color_index in data[0][project][sub_id][event].items():
-                        if time == 'artifact_percentage':
-                            continue
-                        print(f'time: {time}')
-                        print(f'color_index: {color_index}')
-
-                        # Get the index of the rpeak in the signals dataframe by the time_v
-                        rpeak_index = time_v.index(float(time))
-                        print(f'rpeak_index: {rpeak_index}')
-
-                        # Get the yellow peaks indices from the signal attributes
-                        yellow_peaks = signal_attributes['yellow_peaks']
-
-                        print(f'yellow_peaks: {yellow_peaks}')
-
-                        # If the rpeak is a red peak, and it is in the yellow peaks list, remove it
-                        if color_index == 'red' and rpeak_index in yellow_peaks:
-                            yellow_peaks.remove(rpeak_index)
-                            print(f'yellow_peaks: {yellow_peaks}')
-
-                        # If the rpeak is a yellow peak, and it is not in the yellow peaks list, add it
-                        elif color_index == 'yellow' and rpeak_index not in yellow_peaks:
-                            yellow_peaks.append(rpeak_index)
-                            print(f'yellow_peaks: {yellow_peaks}')
-
-                        # Update the signal attributes with the new yellow peaks list
-                        signal_attributes['yellow_peaks'] = yellow_peaks
-
-                        # Enter the new artifact percentage to artifact_percentage column in the events dataframe for the specific subject and event
-                        events_df.loc[(events_df['Id'] == sub_id) & (events_df['event_name'] == event), 'artifacts_percentage_%'] = artifact_percentage
-                        events_df.loc[(events_df['Id'] == sub_id) & (events_df['event_name'] == event), 'done'] = True
-
-                        # Update the signal attributes in the hdf file
-                        file = h5py.File(hdf_file, 'r+')
-                        file[sub_id]['rpeaks'].attrs['signal_attributes'] = json.dumps(signal_attributes).encode('utf-8')
-
-                        
-                        file.close()
-
-                        # Update the events dataframe in the hdf file
-                        events_df.to_parquet(hdf_file.replace('.hdf5', '.parquet'), index=False)
-
-                        print(f'Changes saved successfully!')
-
-                        # Path to your JSON file
-                        file_path = r'C:\Users\PsyLab-6028\Desktop\RoeeProj\pages\data\mindwareData'
-
-                        file_path = os.path.join(file_path, f'{project}_UpdatedData.csv')
-
-                        # Read the existing data
-                        if os.path.exists(file_path):
-                            updated_df = pd.read_csv(file_path)
-                        else:
-                            updated_df = pd.DataFrame()
-
-                        # Assuming `data` is a list of dictionaries and you want to update the first item
-                        new_data = {
-                            'project': project,
-                            'subject_id': sub_id,
-                            'event': event,
-                            'rpeak_index': rpeak_index,
-                            'rpeak_time': float(time),
-                            'new color': color_index,
-                            'last_updated': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                            'status': 'New'
-                        }
-                        updated_df = pd.concat([updated_df, pd.DataFrame(new_data, index=[0])], ignore_index=True)
-
-
-                        # Write the updated data back to the file
-                        updated_df.to_csv(file_path, index=False)
-
-                        message = 'Changes saved successfully!'
-
-
-        return message
-
-    confirm_message = save_signal_changes(data)
+                atomic_write(updated_path, lambda path: manager._write_metadata(path, updates))
+                atomic_write(csv_path, lambda path: pd.json_normalize(updates, sep="_").to_csv(path, index=False))
+                atomic_write(manager.events_parquet_path, pl.from_pandas(events_df).write_parquet)
+    except Exception as error:
+        logger.exception("Unable to save signal corrections")
+        return [f"Could not save changes: {error}"], [True], data, dash.no_update
 
     return [confirm_message], [True], [], [{}]
 

@@ -23,10 +23,10 @@
         "Time"
     ],
     "output": {
-        "path": "G:\\Shared drives\\AdmonPsy - RDoC Study\\Experiment\\Outputs"
+        "path": ""
     },
     "input": {
-        "path": "G:\\Shared drives\\AdmonPsy - RDoC Study\\Experiment\\Data"
+        "path": ""
     },
     "HDF5": {
         "path": ""

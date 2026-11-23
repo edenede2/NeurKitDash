@@ -8,19 +8,12 @@ import plotly.graph_objs as go
 import pandas as pd
 import h5py
 import numpy as np
-import webview
 import os
 # import dash_core_components as dcc
 from flask import Flask
 import neurokit2 as nk
-import base64
 import json
-import io
-import re
 import dash
-import subprocess
-import threading
-import queue
 from sklearn.cluster import KMeans, AgglomerativeClustering
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
@@ -28,10 +21,11 @@ import platform
 
 
 
+from pages.paths import TEMPLATES_PATH, project_names
+
 dash.register_page(__name__, name="Project Settings", path="/settings", order=1)
 
-projects = [(project.replace(".json", "")).split("_")[0] for project in os.listdir(r"C:\\Users\\PsyLab-6028\\Desktop\\RoeeProj\\pages\\templates") if project.endswith(".json")]
-projects.append('Add Project')
+projects = project_names() + ['Add Project']
 
 layout = html.Div([
     html.H1("Project Settings"),
@@ -54,7 +48,8 @@ layout = html.Div([
 def get_project_settings(project_name):
     project_settings = {}
     if project_name != 'Add Project':
-        with open(f"C:\\Users\\PsyLab-6028\\Desktop\\RoeeProj\\pages\\templates\\{project_name}_template.json", "r") as f:
+        template_path = os.path.join(TEMPLATES_PATH, f"{project_name}_template.json")
+        with open(template_path, "r", encoding="utf-8") as f:
             project_settings = json.load(f)
     else:
         # Template for new project
@@ -83,7 +78,8 @@ def get_project_settings(project_name):
 
 def save_project_settings(project_name, project_settings):
     project_name = project_name.replace(" ", "_")
-    with open(f"C:\\Users\\PsyLab-6028\\Desktop\\RoeeProj\\pages\\templates\\{project_name}_template.json", "w") as f:
+    template_path = os.path.join(TEMPLATES_PATH, f"{project_name}_template.json")
+    with open(template_path, "w", encoding="utf-8") as f:
         json.dump(project_settings, f, indent=4)
     return True
 

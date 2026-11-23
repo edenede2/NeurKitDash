@@ -7,7 +7,6 @@ import plotly.graph_objs as go
 import pandas as pd
 import h5py
 import numpy as np
-import webview
 import os
 # import dash_core_components as dcc
 from flask import Flask
@@ -19,14 +18,11 @@ import re
 import dash
 import datetime
 
+from pages.paths import TEMPLATES_PATH, project_names
+
 dash.register_page(__name__, name="Events Editing", path="/events_edit", order=4)
-pages = {}
+pages = {name: name for name in project_names()}
 
-for page in os.listdir(r"C:\Users\PsyLab-6028\Desktop\RoeeProj\pages\templates"):
-    page_name = page.split("_")[0]
-    page_value = page.split("_")[0]
-
-    pages[page_name] = page_value
 
 layout = html.Div([
     dbc.Container([
@@ -86,12 +82,14 @@ def show_subjects(n_click, project):
         raise PreventUpdate
     
     if project == 'fibro':
-        json_file = r'C:\Users\PsyLab-6028\Desktop\RoeeProj\pages\templates\fibro_template.json'
+        json_file = (TEMPLATES_PATH / "fibro_template.json")
         with open(json_file, 'r') as file:
             template = json.load(file)
             file.close()
 
-        hdf_file = template['HDF5']['path']
+        hdf_file = template["HDF5"]["path"]
+        if not hdf_file or not os.path.isfile(hdf_file):
+            return html.P("Set an accessible HDF5 path in Project Settings to edit legacy events.")
 
         subjects_start_end_times = {}
 
@@ -190,7 +188,7 @@ def show_signal(n_click, virtualRows, selected_rows, project, signal_type):
     print(selected_rows)
     if project == 'fibro':
         print('fibro')
-        json_file = r'C:\Users\PsyLab-6028\Desktop\RoeeProj\pages\templates\fibro_template.json'
+        json_file = (TEMPLATES_PATH / "fibro_template.json")
         
         print('loading json file')
         

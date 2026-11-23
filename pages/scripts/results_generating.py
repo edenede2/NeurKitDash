@@ -1,6 +1,7 @@
 import h5py
 import numpy as np
 import os
+from pathlib import Path
 import pandas as pd
 from tqdm import tqdm
 import json
@@ -15,13 +16,16 @@ warnings.filterwarnings('ignore')
 
 
 
+DATA_PATH = Path(__file__).resolve().parents[1] / "data" / "mindwareData"
+
+
 def main(param):
     print('This is a message from the function main')
     project = param
 
     
 
-    fibro_hdf_file = r'C:\Users\PsyLab-6028\Desktop\RoeeProj\pages\data\mindwareData'
+    fibro_hdf_file = DATA_PATH
     fibro_hdf_file = os.path.join(fibro_hdf_file, f'{project}_mindware.hdf5')
 
     
@@ -55,7 +59,7 @@ def main(param):
         current_subject_index = subject_list.index(subject)
         group = subject_list[current_subject_index]
 
-        fibro_hdf_file = r'C:\Users\PsyLab-6028\Desktop\RoeeProj\pages\data\mindwareData'
+        fibro_hdf_file = DATA_PATH
         fibro_hdf_file = os.path.join(fibro_hdf_file, f'{project}_mindware.hdf5')
 
         if not os.path.exists(fibro_hdf_file):
@@ -295,7 +299,7 @@ def main(param):
         
 
 
-    fibro_hdf_file = r'C:\Users\PsyLab-6028\Desktop\RoeeProj\pages\data\mindwareData'
+    fibro_hdf_file = DATA_PATH
     fibro_hdf_file = os.path.join(fibro_hdf_file, f'{project}_mindware.hdf5')
 
     if not os.path.exists(fibro_hdf_file):

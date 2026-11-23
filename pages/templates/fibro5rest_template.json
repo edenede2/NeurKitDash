@@ -1,0 +1,88 @@
+{
+    "parameters": {
+        "sampling_rate": 500
+    },
+    "channel": [
+        "Time",
+        "Bio",
+        "GSC",
+        "X",
+        "Y"
+    ],
+    "events": {
+        "event_1": {
+            "name": "Questionnaire_A",
+            "start": "F2",
+            "end": "F3"
+        },
+        "event_2": {
+            "name": "Full_Session",
+            "start": "F2",
+            "end": "rb3"
+        },
+        "event_3": {
+            "name": "Rest_Period",
+            "start": "F4",
+            "end": "F5",
+            "length": 300
+        },
+        "event_4": {
+            "name": "Pre_Session",
+            "start": "F1",
+            "end": "F2"
+        },
+        "learning_block1": {
+            "name": "Learning_Block_1",
+            "start": "lb1",
+            "end": "lb2"
+        },
+        "learning_block2": {
+            "name": "Learning_Block_2",
+            "start": "lb2",
+            "end": "lb3"
+        },
+        "learning_block3": {
+            "name": "Learning_Block_3",
+            "start": "lb3",
+            "end": "lb4"
+        },
+        "all_learning": {
+            "name": "All_Learning_Blocks",
+            "start": "lb1",
+            "end": "lb4"
+        },
+        "reversal_block1": {
+            "name": "Reversal_Block_1",
+            "start": "rb1",
+            "end": "rb2"
+        },
+        "reversal_block2": {
+            "name": "Reversal_Block_2",
+            "start": "rb2",
+            "end": "rb3"
+        },
+        "all_reversal": {
+            "name": "All_Reversal_Blocks",
+            "start": "rb1",
+            "end": "rb3"
+        }
+    },
+    "blocks_shorts": {
+        "learning_block1": "lb1",
+        "learning_block2": "lb2",
+        "learning_block3": "lb3",
+        "learning_block4": "lb4",
+        "reversal_block1": "rb1",
+        "reversal_block2": "rb2",
+        "reversal_block3": "rb3"
+    },
+    "output": {
+        "path": ""
+    },
+    "input": {
+        "path": ""
+    },
+    "HDF5": {
+        "path": ""
+    }
+}

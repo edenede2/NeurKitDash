@@ -1,0 +1,39 @@
+{
+    "parameters": {
+        "sampling_rate": 500
+    },
+    "channel": [
+        "Time",
+        "Bio",
+        "GSC",
+        "X",
+        "Y"
+    ],
+    "events": {
+        "event_1": {
+            "name": "Rest",
+            "start": "F1",
+            "end": "F2"
+        },
+        "event_2": {
+            "name": "RL",
+            "start": "F3",
+            "end": "F4"
+        },
+        "event_3": {
+            "name": "RA",
+            "start": "F5",
+            "end": "F6"
+        }
+    },
+    "blocks_shorts": {},
+    "output": {
+        "path": ""
+    },
+    "input": {
+        "path": ""
+    },
+    "HDF5": {
+        "path": ""
+    }
+}

@@ -79,10 +79,10 @@
         "Z"
     ],
     "output": {
-        "path": "G:\\Shared drives\\AdmonPsy - Driving&Stress\\Driving&Stress RESEARCH\\DATA_HRV_THESIS\\Experiment\\OUTPUTS"
+        "path": ""
     },
     "input": {
-        "path": "G:\\Shared drives\\AdmonPsy - Driving&Stress\\Driving&Stress RESEARCH\\DATA_HRV_THESIS\\Experiment\\DATA"
+        "path": ""
     },
     "HDF5": {
         "path": ""

@@ -1,6 +1,7 @@
 import h5py
 import numpy as np
 import os
+from pathlib import Path
 import pandas as pd
 import polars as pl
 from tqdm import tqdm
@@ -15,17 +16,19 @@ warnings.filterwarnings('ignore')
 
 
 
+DATA_PATH = Path(__file__).resolve().parents[1] / "data" / "mindwareData"
+
+
 def main(param):
     project = param
     print('This is a message from the function main')
 
-    csv_file = r'C:\Users\PsyLab-6028\Desktop\RoeeProj\pages\data\mindwareData'
+    csv_file = DATA_PATH
     csv_file = os.path.join(csv_file, f'{project}_UpdatedData.csv')
 
     if not os.path.exists(csv_file):
         print(f'File {csv_file} not found', file=sys.stderr)
-        ti.sleep(20)
-        return
+        return 1
     # subject_list = [group for group in file.keys() if re.search(r'^sub_', group)]
     # file.close()
 
@@ -40,24 +43,21 @@ def main(param):
 
     if len(project_updates) == 0:
         print('No updates found for this project')
-        ti.sleep(20)
-        return
+        return 1
     
 
     new_updates = project_updates.filter(pl.col('status') == 'New')
 
     if len(new_updates) == 0:
         print('No NEW updates found for this project')
-        ti.sleep(20)
-        return
+        return 1
     
     subject_list = [subject for subject in new_updates['subject_id']]
 
 
     if len(subject_list) == 0:
         print('No subjects to analyze')
-        ti.sleep(20)
-        return
+        return 1
 
     # The subjects list should be unique
     subject_list = list(set(subject_list))
@@ -85,7 +85,7 @@ def main(param):
         current_subject_index = subject_list.index(subject)
         group = subject_list[current_subject_index]
 
-        fibro_hdf_file = r'C:\Users\PsyLab-6028\Desktop\RoeeProj\pages\data\mindwareData'
+        fibro_hdf_file = DATA_PATH
         fibro_hdf_file = os.path.join(fibro_hdf_file, f'{project}_mindware.hdf5')
 
         if not os.path.exists(fibro_hdf_file):
@@ -317,13 +317,12 @@ def main(param):
         
 
 
-    fibro_hdf_file = r'C:\Users\PsyLab-6028\Desktop\RoeeProj\pages\data\mindwareData'
+    fibro_hdf_file = DATA_PATH
     fibro_hdf_file = os.path.join(fibro_hdf_file, f'{project}_mindware.hdf5')
 
     if not os.path.exists(fibro_hdf_file):
         print(f'File {fibro_hdf_file} not found', file=sys.stderr)
-        ti.sleep(20)
-        return
+        return 1
    
 
     metrics_pl_df = metrics_pl_df.with_row_index(name='Index')
@@ -388,4 +387,4 @@ if __name__ == '__main__':
     except IndexError:
         param = 'fibro'
 
-    main(param)
+    sys.exit(main(param))
